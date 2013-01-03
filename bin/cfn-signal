@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+
+#==============================================================================
+# Copyright 2011 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#==============================================================================
+from cfnbootstrap import util
+from optparse import OptionParser
+import base64
+import platform
+import re
+import requests
+import socket
+import sys
+import time
+try:
+    import simplejson as json
+except ImportError:
+    import json
+
+default_id = util.get_instance_id()
+if not default_id:
+    default_id = socket.getfqdn()
+
+parser = OptionParser(usage="usage: %prog [options] [WaitConditionHandle URL]")
+parser.add_option("-s", "--success", help="If true, signal success to CloudFormation; if false, signal failure. Default: true",
+                        dest="success", action="store", type="choice", choices=["true", "false"],  default="true")
+parser.add_option("-r", "--reason", help="The reason for success/failure", dest="reason", type="string", action="store", default="")
+parser.add_option("-d", "--data", help="Data to include with the WaitCondition signal", dest="data", type="string", action="store", default="")
+parser.add_option("-i", "--id", help="A unique ID to send with the WaitCondition signal", dest="id", type="string", action="store", default=default_id)
+parser.add_option("-e", "--exit-code", help="Derive success or failure from specified exit code", dest="exit_code", type="int", action="store")
+
+(options, args) = parser.parse_args()
+
+signal_success = True
+
+if options.exit_code:
+    signal_success = False
+elif options.success != "true":
+    signal_success = False
+
+if not args or not args[0]:
+    print >> sys.stderr, "Error: No WaitConditionHandle URL specified"
+    parser.print_help(sys.stderr)
+    sys.exit(1)
+
+if not options.reason and not signal_success:
+    options.reason="Configuration failed."
+
+data = { 'Status': 'SUCCESS' if signal_success else 'FAILURE',
+         'Reason' : options.reason,
+         'Data' : options.data,
+         'UniqueId' : options.id }
+
+try:
+    url = args[0] if re.match(r'https?://.*', args[0]) else base64.b64decode(args[0])
+except TypeError:
+    print >> sys.stderr, "Error: Invalid WaitConditionHandle URL specified: %s" % args[0]
+    sys.exit(1)
+
+if not re.match(r'https?://.*', url):
+    print >> sys.stderr, "Error: Invalid WaitConditionHandle URL specified: %s" % args[0]
+    sys.exit(1)
+
+@util.retry_on_failure()
+def send(url, data):
+    requests.put(url,
+                 data=json.dumps(data),
+                 headers={"Content-Type" : ""},
+                 verify=util.get_cert(),
+                 config={'danger_mode' : True})
+
+try:
+    send(url, data)
+    print 'CloudFormation signaled successfully with %s.' % data['Status']
+    sys.exit(0)
+except IOError, e:
+    print >> sys.stderr, 'Error signaling CloudFormation: %s' % str(e)
+    sys.exit(1)

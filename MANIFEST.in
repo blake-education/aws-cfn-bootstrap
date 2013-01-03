@@ -1,0 +1,4 @@
+include license/LICENSE.txt
+include license/NOTICE.txt
+include MANIFEST.in
+include init/cfn-hup
