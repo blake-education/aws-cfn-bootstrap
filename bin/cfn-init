@@ -87,13 +87,14 @@ if not options.stack_name or not options.logical_resource_id:
 
 if options.credential_file:
     try:
-        access_key, secret_key = util.extract_credentials(options.credential_file)
+        access_key, secret_key, security_token = util.extract_credentials(options.credential_file)
     except IOError, e:
         print >> sys.stderr, "Error retrieving credentials from file:\n\t%s" % e.strerror
         sys.exit(1)
 else:
     access_key = options.access_key
     secret_key = options.secret_key
+    security_token = None
 
 url = CloudFormationClient.endpointForRegion(options.region)
 if options.endpoint:
@@ -104,7 +105,7 @@ if options.configsets:
     configSets = options.configsets.split(',')
 
 try:
-    detail = CloudFormationClient(Credentials(access_key, secret_key), url=url, region=options.region).describe_stack_resource(options.logical_resource_id, options.stack_name)
+    detail = CloudFormationClient(Credentials(access_key, secret_key, security_token), url=url, region=options.region).describe_stack_resource(options.logical_resource_id, options.stack_name)
 except IOError, e:
     if e.strerror:
         print >> sys.stderr, e.strerror

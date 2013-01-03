@@ -97,18 +97,20 @@ def extract_credentials(path):
         if stat.S_IRWXG & mode or stat.S_IRWXO & mode:
             raise IOError(None, "Credential file cannot be accessible by group or other. Please chmod 600 the credential file.")
 
-    access_key, secret_key = '', ''
+    access_key, secret_key, security_token = '', '', None
     with file(path, 'r') as f:
         for line in (line.strip() for line in f):
             if line.startswith("AWSAccessKeyId="):
                 access_key = line.partition('=')[2]
             elif line.startswith("AWSSecretKey="):
                 secret_key = line.partition('=')[2]
+            elif line.startswith("SecurityToken="):
+                security_token = line.partition('=')[2]
 
     if not access_key or not secret_key:
         raise IOError(None, "Credential file must contain the keys 'AWSAccessKeyId' and 'AWSSecretKey'")
 
-    return (access_key, secret_key)
+    return (access_key, secret_key, security_token)
 
 _dot_split = re.compile(r'(?<!\\)\.')
 _slash_replace = re.compile(r'\\(?=\.)')
